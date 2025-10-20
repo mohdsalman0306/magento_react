@@ -45,18 +45,22 @@ export const GET_MEGAMENU = gql`
   }
 `;
 export const GET_CATEGORY_PRODUCTS = gql`
-  query getCategoryProdcuts($category_uid: String!) {
+  query getCategoryProdcuts(
+    $category_uid: String!
+    $sort: ProductAttributeSortInput
+  ) {
     products(
       filter: { category_uid: { eq: $category_uid } }
+      sort: $sort
       pageSize: 20
       currentPage: 1
-      sort: {}
     ) {
       aggregations(filter: {}) {
         amshopby_filter_data {
           is_multiselect
           filter_code
           display_mode
+          display_mode_label
           units_label
         }
         attribute_code

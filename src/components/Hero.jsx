@@ -2,7 +2,7 @@ export default function Hero() {
   return (
     <div className="relative bg-gray-100 h-[60vh]">
       <img
-        src="https://sanipexgroup.com/media/catalog/category/BAGNODESIGN_NARA_OYSTER_SUB_SUB_BANNER_OPTION_4_8.webp"
+        src="https://sanipexgroup.com/media/mageplaza/bannerslider/banner/image/s/t/steam_spa_wellness_main_banner.webp"
         alt="Luxury Living"
         className="absolute inset-0 w-full h-full object-cover"
       />

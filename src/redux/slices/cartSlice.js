@@ -117,7 +117,22 @@ const cartSlice = createSlice({
       state.cartData = action.payload;
       localStorage.setItem("cartData", JSON.stringify(action.payload));
     },
-    clearCart: () => initialState,
+    clearCart: () => {
+      console.log("cleared");
+      localStorage.removeItem("guestCartId");
+      localStorage.removeItem("cartId");
+      localStorage.removeItem("cartData");
+      localStorage.removeItem("items");
+      localStorage.removeItem("total_quantity");
+      return {
+        loading: false,
+        items: [],
+        total_quantity: 0,
+        cartId: null,
+        guestCartId: null,
+        cartData: [],
+      };
+    },
   },
   extraReducers: (builder) => {
     builder

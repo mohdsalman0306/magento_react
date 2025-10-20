@@ -170,21 +170,21 @@ export default function CheckoutPage() {
         </Card>
         <Card>
           <h2 className="text-lg font-semibold">Delivery method</h2>
-          {/* <RadioGroup
+          <RadioGroup
             name={"shipping"}
             value={deliveryMethod}
             onChange={setDeliveryMethod}
             options={[
               {
-                label: "Standard (4-10 business days) - $5.00",
+                title: "Standard (4-10 business days) - $5.00",
                 value: "standard",
               },
               {
-                label: "Express (2-5 business days) - $16.00",
+                title: "Express (2-5 business days) - $16.00",
                 value: "express",
               },
             ]}
-          /> */}
+          />
         </Card>
       </div>
       <div className="space-y-6">

@@ -11,7 +11,7 @@ const initialState = {
 };
 
 export const loginUser = createAsyncThunk(
-  "",
+  'auth/login', // Add descriptive action type
   async (credentials, { rejectWithValue }) => {
     try {
       const { data } = await client.mutate({
@@ -21,22 +21,29 @@ export const loginUser = createAsyncThunk(
           password: credentials.password,
         },
       });
-      if (data?.generateCustomerToken) {
-        localStorage.setItem("token", data?.generateCustomerToken?.token);
-        return data?.generateCustomerToken?.token;
-      } else {
-        throw new Error("Invalid credentials");
+      if (!data?.generateCustomerToken?.token) {
+        throw new Error('Invalid response from server');
       }
+      localStorage.setItem("token", data.generateCustomerToken.token);
+      return data.generateCustomerToken.token;
     } catch (error) {
-      return rejectWithValue(error.message || "Login failed!");
+      const message = error.graphQLErrors?.[0]?.message || error.message || 'Login failed';
+      return rejectWithValue(message);
     }
   }
 );
 
 const isTokenExpired = (token) => {
-  if (!token) return true;
-  const decoded = JSON.parse(atob(token.split(".")[1])); // Decode payload
-  return decoded.exp * 1000 < Date.now(); // Convert `exp` to milliseconds and compare
+  try {
+    if (!token) return true;
+    const payload = token.split('.')[1];
+    if (!payload) return true;
+    const decoded = JSON.parse(atob(payload));
+    return !decoded.exp || decoded.exp * 1000 < Date.now();
+  } catch (error) {
+    console.log(error.message)
+    return true; // If token is invalid format, consider it expired
+  }
 };
 
 if (isTokenExpired(initialState.token)) {
