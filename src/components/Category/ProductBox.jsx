@@ -15,8 +15,7 @@ const ProductBox = ({ product, loading }) => {
   return (
     <div
       key={product.uid}
-      className="group relative border-spacing-2 border-gray-400 "
-    >
+      className="group relative border-spacing-2 border-gray-400">
       <img
         src={product.image.url}
         alt={product.image.label}

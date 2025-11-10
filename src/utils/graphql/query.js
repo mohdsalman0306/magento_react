@@ -46,14 +46,16 @@ export const GET_MEGAMENU = gql`
 `;
 export const GET_CATEGORY_PRODUCTS = gql`
   query getCategoryProdcuts(
-    $category_uid: String!
+    $filters: ProductAttributeFilterInput!
     $sort: ProductAttributeSortInput
+    $pageSize: Int
+    $currentPage: Int
   ) {
     products(
-      filter: { category_uid: { eq: $category_uid } }
+      filter: $filters
       sort: $sort
-      pageSize: 20
-      currentPage: 1
+      pageSize: $pageSize
+      currentPage: $currentPage
     ) {
       aggregations(filter: {}) {
         amshopby_filter_data {

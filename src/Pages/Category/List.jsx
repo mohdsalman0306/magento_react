@@ -25,56 +25,12 @@ import {
 import ProductBox from "../../components/Category/ProductBox";
 import SkeletonProductBox from "../../components/Category/SkeletonProductBox";
 
-// const sortOptions = [
-//   { name: "Most Popular", href: "#", current: true },
-//   { name: "Best Rating", href: "#", current: false },
-//   { name: "Newest", href: "#", current: false },
-//   { name: "Price: Low to High", href: "#", current: false },
-//   { name: "Price: High to Low", href: "#", current: false },
-// ];
 const subCategories = [
   { name: "Totes", href: "#" },
   { name: "Backpacks", href: "#" },
   { name: "Travel Bags", href: "#" },
   { name: "Hip Bags", href: "#" },
   { name: "Laptop Sleeves", href: "#" },
-];
-const filters = [
-  {
-    id: "color",
-    name: "Color",
-    options: [
-      { value: "white", label: "White", checked: false },
-      { value: "beige", label: "Beige", checked: false },
-      { value: "blue", label: "Blue", checked: true },
-      { value: "brown", label: "Brown", checked: false },
-      { value: "green", label: "Green", checked: false },
-      { value: "purple", label: "Purple", checked: false },
-    ],
-  },
-  {
-    id: "category",
-    name: "Category",
-    options: [
-      { value: "new-arrivals", label: "New Arrivals", checked: false },
-      { value: "sale", label: "Sale", checked: false },
-      { value: "travel", label: "Travel", checked: true },
-      { value: "organization", label: "Organization", checked: false },
-      { value: "accessories", label: "Accessories", checked: false },
-    ],
-  },
-  {
-    id: "size",
-    name: "Size",
-    options: [
-      { value: "2l", label: "2L", checked: false },
-      { value: "6l", label: "6L", checked: false },
-      { value: "12l", label: "12L", checked: false },
-      { value: "18l", label: "18L", checked: false },
-      { value: "20l", label: "20L", checked: false },
-      { value: "40l", label: "40L", checked: true },
-    ],
-  },
 ];
 
 function classNames(...classes) {
@@ -86,45 +42,140 @@ const List = () => {
   const [mobileFiltersOpen, setMobileFiltersOpen] = useState(false);
   const [defaultSort, setDefaultSort] = useState("");
   const [sortingLoading, setSortingLoading] = useState(false);
+  const [selectedFilters, setSelectedFilters] = useState({});
+  const [isFilterLoading, setIsFilterLoading] = useState(false);
+  
   const categoryUid = location?.state?.uid;
-  const { loading, err, data, refetch } = useQuery(GET_CATEGORY_PRODUCTS, {
-    // variables: { category_uid: categoryUid },
-    variables: {
-      category_uid: categoryUid,
+  
+  // Build filter object combining category and attribute filters
+  const buildFilterObject = (attributeFilters = {}) => {
+    const filter = {
+      category_uid: { eq: categoryUid },
+    };
+    
+    // Add each attribute filter dynamically
+    Object.keys(attributeFilters).forEach((attributeCode) => {
+      filter[attributeCode] = attributeFilters[attributeCode];
+    });
+    
+    console.log("Built filter object:", filter);
+    return filter;
+  };
+  
+  // Build initial query variables
+  const buildQueryVariables = () => {
+    return {
+      filters: buildFilterObject(selectedFilters),
       sort: {
-        position: "ASC",
+        [defaultSort || "position"]: "ASC",
       },
-    },
-    // fetchPolicy: "network-only", // Used for first execution
-    nextFetchPolicy: "cache-first", // Used for subsequent executions
+      pageSize: 20,
+      currentPage: 1,
+    };
+  };
+  
+  const { loading, err, data, refetch } = useQuery(GET_CATEGORY_PRODUCTS, {
+    variables: buildQueryVariables(),
+    fetchPolicy: "cache-and-network",
+    nextFetchPolicy: "cache-first",
   });
+
   const { items, aggregations, sort_fields, page_info, suggestions } =
     data?.products || {};
-  console.log(aggregations, "++++");
+
   useEffect(() => {
     if (sort_fields?.default) {
       setDefaultSort(sort_fields.default);
     }
   }, [sort_fields]);
 
+  // Handle filter checkbox changes
+  const handleFilterChange = async (attributeCode, value, isChecked) => {
+    setIsFilterLoading(true);
+    
+    setSelectedFilters((prevFilters) => {
+      const newFilters = { ...prevFilters };
+      
+      if (isChecked) {
+        // Add filter
+        if (!newFilters[attributeCode]) {
+          newFilters[attributeCode] = { in: [value] };
+        } else {
+          // Make sure we don't mutate the original array
+          newFilters[attributeCode] = {
+            in: [...newFilters[attributeCode].in, value]
+          };
+        }
+      } else {
+        // Remove filter
+        if (newFilters[attributeCode]) {
+          const updatedValues = newFilters[attributeCode].in.filter(
+            (v) => v !== value
+          );
+          
+          // Remove attribute if no values left
+          if (updatedValues.length === 0) {
+            delete newFilters[attributeCode];
+          } else {
+            newFilters[attributeCode] = { in: updatedValues };
+          }
+        }
+      }
+      
+      console.log("Updated filters:", newFilters);
+      return newFilters;
+    });
+  };
+
+  // Refetch when filters change with debounce
+  useEffect(() => {
+    if (!categoryUid) return;
+    
+    const timer = setTimeout(async () => {
+      try {
+        const filterObject = buildFilterObject(selectedFilters);
+        console.log("Refetching with selected filters:", selectedFilters);
+        console.log("Final filter object sent to API:", filterObject);
+        
+        await refetch({
+          category_uid: categoryUid,
+          sort: {
+            [defaultSort || "position"]: "ASC",
+          },
+          filters: filterObject,
+          pageSize: 20,
+          currentPage: 1,
+        });
+      } catch (error) {
+        console.error("Error applying filters:", error);
+        console.error("Error details:", error.graphQLErrors);
+      } finally {
+        setIsFilterLoading(false);
+      }
+    }, 300); // 300ms debounce
+
+    return () => clearTimeout(timer);
+  }, [selectedFilters, categoryUid, defaultSort]);
+
   const handleSorting = async (e, value) => {
     e.preventDefault();
     const lastSort = localStorage.getItem("lastSort");
     setDefaultSort(value);
+    
     if (lastSort != value) {
       setSortingLoading(true);
-
       localStorage.setItem("lastSort", value);
-      // Perform sorting logic based on the selected option from the above GraphQl query
+      
       try {
-        console.log("Calling refetch with ID:", value, "Type:", typeof value);
         await refetch({
           category_uid: categoryUid,
           sort: {
             [value]: "ASC",
           },
+          filters: buildFilterObject(selectedFilters),
+          pageSize: 20,
+          currentPage: 1,
         });
-        console.log("Refetching data with new sort option:", loading);
       } catch (error) {
         console.error("Error fetching sorted products:", error);
       } finally {
@@ -133,12 +184,15 @@ const List = () => {
     }
   };
 
-  console.log(sort_fields);
-  console.log(data?.products);
-  // console.log(categoryUid);
+  // Check if a filter is currently selected
+  const isFilterSelected = (attributeCode, value) => {
+    return selectedFilters[attributeCode]?.in?.includes(value) || false;
+  };
+
   const products = items;
-  console.log(aggregations);
+  
   if (err) return <p>Error: {err.message}</p>;
+  
   return (
     <>
       <div className="bg-white">
@@ -171,32 +225,18 @@ const List = () => {
                   </button>
                 </div>
 
-                {/* Filters */}
+                {/* Mobile Filters */}
                 <form className="mt-4 border-t border-gray-200">
-                  <h3 className="sr-only">Categories</h3>
-                  <ul
-                    role="list"
-                    className="px-2 py-3 font-medium text-gray-900"
-                  >
-                    {subCategories?.map((category) => (
-                      <li key={category.name}>
-                        <a href={category.href} className="block px-2 py-3">
-                          {category.name}
-                        </a>
-                      </li>
-                    ))}
-                  </ul>
-
-                  {filters?.map((section) => (
+                  {aggregations?.map((aggregation, index) => (
                     <Disclosure
-                      key={section.id}
+                      key={index}
                       as="div"
                       className="border-t border-gray-200 px-4 py-6"
                     >
                       <h3 className="-mx-2 -my-3 flow-root">
                         <DisclosureButton className="group flex w-full items-center justify-between bg-white px-2 py-3 text-gray-400 hover:text-gray-500">
                           <span className="font-medium text-gray-900">
-                            {section.name}
+                            {aggregation.label}
                           </span>
                           <span className="ml-6 flex items-center">
                             <PlusIcon
@@ -212,14 +252,25 @@ const List = () => {
                       </h3>
                       <DisclosurePanel className="pt-6">
                         <div className="space-y-6">
-                          {section?.options?.map((option, optionIdx) => (
+                          {aggregation?.options?.map((option, optionIdx) => (
                             <div key={option.value} className="flex gap-3">
                               <div className="flex h-5 shrink-0 items-center">
                                 <div className="group grid size-4 grid-cols-1">
                                   <input
-                                    defaultValue={option.value}
-                                    id={`filter-mobile-${section.id}-${optionIdx}`}
-                                    name={`${section.id}[]`}
+                                    value={option.value}
+                                    checked={isFilterSelected(
+                                      aggregation.attribute_code,
+                                      option.value
+                                    )}
+                                    onChange={(e) =>
+                                      handleFilterChange(
+                                        aggregation.attribute_code,
+                                        option.value,
+                                        e.target.checked
+                                      )
+                                    }
+                                    id={`filter-mobile-${aggregation.attribute_code}-${optionIdx}`}
+                                    name={`${aggregation.attribute_code}[]`}
                                     type="checkbox"
                                     className="col-start-1 row-start-1 appearance-none rounded border border-gray-300 bg-white checked:border-indigo-600 checked:bg-indigo-600 indeterminate:border-indigo-600 indeterminate:bg-indigo-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:border-gray-300 disabled:bg-gray-100 disabled:checked:bg-gray-100 forced-colors:appearance-auto"
                                   />
@@ -246,10 +297,14 @@ const List = () => {
                                 </div>
                               </div>
                               <label
-                                htmlFor={`filter-mobile-${section.id}-${optionIdx}`}
+                                htmlFor={`filter-mobile-${aggregation.attribute_code}-${optionIdx}`}
                                 className="min-w-0 flex-1 text-gray-500"
                               >
-                                {option.label}
+                                {option.label === "1"
+                                  ? "Yes"
+                                  : option.label === "0"
+                                  ? "No"
+                                  : option.label}
                               </label>
                             </div>
                           ))}
@@ -330,6 +385,7 @@ const List = () => {
               </h2>
 
               <div className="grid grid-cols-1 gap-x-8 gap-y-10 lg:grid-cols-4">
+                {/* Desktop Filters */}
                 <div className="hidden lg:block">
                   {aggregations?.map((aggregation, index) => (
                     <div key={index} className="border-b border-gray-200 py-6">
@@ -342,8 +398,18 @@ const List = () => {
                             <div className="flex h-5 shrink-0 items-center">
                               <div className="group grid size-4 grid-cols-1">
                                 <input
-                                  defaultValue={option.value}
-                                  defaultChecked={option.checked}
+                                  value={option.value}
+                                  checked={isFilterSelected(
+                                    aggregation.attribute_code,
+                                    option.value
+                                  )}
+                                  onChange={(e) =>
+                                    handleFilterChange(
+                                      aggregation.attribute_code,
+                                      option.value,
+                                      e.target.checked
+                                    )
+                                  }
                                   id={`filter-${aggregation.attribute_code}-${optionIdx}`}
                                   name={`${aggregation.attribute_code}[]`}
                                   type="checkbox"
@@ -371,15 +437,7 @@ const List = () => {
                                 </svg>
                               </div>
                             </div>
-                            {/* <label
-                              key={optionIdx}
-                              htmlFor={`filter-${aggregation.id}-${optionIdx}`}
-                              className="text-sm text-gray-600"
-                            >
-                              {option.label}
-                            </label> */}
                             <label
-                              key={optionIdx}
                               htmlFor={`filter-${aggregation.attribute_code}-${optionIdx}`}
                               className="text-sm text-gray-600"
                             >
@@ -396,97 +454,18 @@ const List = () => {
                   ))}
                 </div>
 
-                {/* Filters */}
-                {/* <form className="hidden lg:block">
-                  <h3 className="sr-only">Categories</h3>
-                  <ul
-                    role="list"
-                    className="space-y-4 border-b border-gray-200 pb-6 text-sm font-medium text-gray-900"
-                  >
-                    {subCategories?.map((category) => (
-                      <li key={category.name}>
-                        <a href={category.href}>{category.name}</a>
-                      </li>
-                    ))}
-                  </ul>
-                  {filters?.map((section) => (
-                    <Disclosure
-                      key={section.id}
-                      as="div"
-                      className="border-b border-gray-200 py-6"
-                    >
-                      <h3 className="-my-3 flow-root">
-                        <DisclosureButton className="group flex w-full items-center justify-between bg-white py-3 text-sm text-gray-400 hover:text-gray-500">
-                          <span className="font-medium text-gray-900">
-                            {section.name}
-                          </span>
-                          <span className="ml-6 flex items-center">
-                            <PlusIcon
-                              aria-hidden="true"
-                              className="size-5 group-data-[open]:hidden"
-                            />
-                            <MinusIcon
-                              aria-hidden="true"
-                              className="size-5 group-[&:not([data-open])]:hidden"
-                            />
-                          </span>
-                        </DisclosureButton>
-                      </h3>
-                      <DisclosurePanel className="pt-6">
-                        <div className="space-y-4">
-                          {section?.options?.map((option, optionIdx) => (
-                            <div key={option.value} className="flex gap-3">
-                              <div className="flex h-5 shrink-0 items-center">
-                                <div className="group grid size-4 grid-cols-1">
-                                  <input
-                                    defaultValue={option.value}
-                                    defaultChecked={option.checked}
-                                    id={`filter-${section.id}-${optionIdx}`}
-                                    name={`${section.id}[]`}
-                                    type="checkbox"
-                                    className="col-start-1 row-start-1 appearance-none rounded border border-gray-300 bg-white checked:border-indigo-600 checked:bg-indigo-600 indeterminate:border-indigo-600 indeterminate:bg-indigo-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:border-gray-300 disabled:bg-gray-100 disabled:checked:bg-gray-100 forced-colors:appearance-auto"
-                                  />
-                                  <svg
-                                    fill="none"
-                                    viewBox="0 0 14 14"
-                                    className="pointer-events-none col-start-1 row-start-1 size-3.5 self-center justify-self-center stroke-white group-has-[:disabled]:stroke-gray-950/25"
-                                  >
-                                    <path
-                                      d="M3 8L6 11L11 3.5"
-                                      strokeWidth={2}
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      className="opacity-0 group-has-[:checked]:opacity-100"
-                                    />
-                                    <path
-                                      d="M3 7H11"
-                                      strokeWidth={2}
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      className="opacity-0 group-has-[:indeterminate]:opacity-100"
-                                    />
-                                  </svg>
-                                </div>
-                              </div>
-                              <label
-                                htmlFor={`filter-${section.id}-${optionIdx}`}
-                                className="text-sm text-gray-600"
-                              >
-                                {option.label}
-                              </label>
-                            </div>
-                          ))}
-                        </div>
-                      </DisclosurePanel>
-                    </Disclosure>
-                  ))}
-                </form> */}
-
                 {/* Product grid */}
                 <div className="lg:col-span-3">
+                  {/* Show filter loading indicator */}
+                  {isFilterLoading && (
+                    <div className="mb-4 p-2 bg-blue-50 text-blue-700 text-sm rounded">
+                      Applying filters...
+                    </div>
+                  )}
+                  
                   <div>
                     <div className="mt-6 grid grid-cols-1 gap-x-6 gap-y-10 sm:grid-cols-2 lg:grid-cols-4 xl:gap-x-8">
-                      {loading
+                      {loading || isFilterLoading
                         ? Array.from({ length: 8 }).map((_, index) => (
                             <SkeletonProductBox key={index} />
                           ))
